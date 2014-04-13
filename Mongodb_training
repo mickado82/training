@@ -1,0 +1,144 @@
+
+========== Notes about update =================
+
+db.collection.update(
+   <query>,
+   <update>,
+   {
+     upsert: <boolean>,
+     multi: <boolean>,
+     writeConcern: <document>
+   }
+)
+The update() method takes the following parameters:
+
+Parameter	Type	Description
+
+query	document	The selection criteria for the update. Use the same query selectors as used in the find() method.
+
+update	document	The modifications to apply. For details see Update Parameter.
+
+upsert	boolean	Optional. If set to true, creates a new document when no document matches the query criteria. The default value is false, which does not insert a new document when no match is found.
+
+multi	boolean	Optional. If set to true, updates multiple documents that meet the query criteria. If set to false, updates one document. The default value is false. For additional information, see Multi Parameter.
+
+writeConcern	document	
+Optional. A document expressing the write concern. Omit to use the default write concern. See Safe Writes.
+(New in version 2.6.)
+
+Returns:	A WriteResult object that contains the status of the operation.
+
+
+======== Default conf file =========
+
+/etc/mongod.conf
+
+Service system V: /etc/rc.d/init.d/mongod
+
+======== Deactivate the service ==============
+
+sudo mv /etc/init/mongod.conf /etc/init/mongod.conf.noexec
+
+======= Create a replica set ============
+
+Add --smallfiles --oplogSize 128 to minimize size ?
+
+--Dirs creation
+mkdir -p ~/mongo/data/rs0-0 ~/mongo/data/rs0-1 ~/mongo/data/rs0-2
+mkdir -p ~/mongo/logs
+
+--Mongo instances initialisation
+mongod --port 27017 --dbpath ~/mongo/data/rs0-0 --logpath ~/mongo/logs/rs0-0.log --fork --replSet rs0
+mongod --port 27018 --dbpath ~/mongo/data/rs0-1 --logpath ~/mongo/logs/rs0-1.log --fork --replSet rs0
+mongod --port 27019 --dbpath ~/mongo/data/rs0-2 --logpath ~/mongo/logs/rs0-2.log --fork --replSet rs0
+
+--Note: 
+The nodes are logging bullshits coz they are waiting to be part of a replset !
+
+--Connect to one mongo instance
+mongo --port 27017
+
+--Initialise the replica set
+rs.initiate()
+
+--Check that the node is primary
+mongo --port 27017
+
+--Add the other fellows
+rs.add("<hostname>:27018")
+rs.add("<hostname>:27019")
+
+/!\ hostname must be the same as the one in rs.conf() / rs.status()
+
+Note: A config file can be used to fully configure the replica:
+http://docs.mongodb.org/manual/reference/replica-configuration/
+	It can be generated with: rs.conf()
+
+--TEST: 
+A fail and restart of the primary node can change its status
+
+--Shutdown of node:
+ use admin
+ db.shutdownServer()
+
+============= Create a second replica set ==============
+
+mkdir -p ~/mongo/data/rs1-0 ~/mongo/data/rs1-1 ~/mongo/data/rs1-2
+
+mongod --port 37017 --dbpath ~/mongo/data/rs1-0 --logpath ~/mongo/logs/rs1-0.log --fork --replSet rs1
+mongod --port 37018 --dbpath ~/mongo/data/rs1-1 --logpath ~/mongo/logs/rs1-1.log --fork --replSet rs1
+mongod --port 37019 --dbpath ~/mongo/data/rs1-2 --logpath ~/mongo/logs/rs1-2.log --fork --replSet rs1
+
+Add the instances (maybe with a conf file ?)
+
+============ Create a shard with the 2 repl sets ==============
+
+mkdir -p ~/mongo/data/conf0 ~/mongo/data/conf1 ~/mongo/data/conf2
+
+-Create the config servers
+
+mongod --configsvr --dbpath ~/mongo/data/conf0 --logpath ~/mongo/logs/config0.log --fork --port 47017
+mongod --configsvr --dbpath ~/mongo/data/conf1 --logpath ~/mongo/logs/config1.log --fork --port 47018
+mongod --configsvr --dbpath ~/mongo/data/conf2 --logpath ~/mongo/logs/config2.log --fork --port 47019
+
+-Create the mongos instance
+
+mongos --port 57017 --configdb myHostName:47017,myHostName:47018,myHostName:47019 --logpath ~/mongo/logs/mongos.log --fork
+
+-Connect to the mongos instance
+mongo --port 57017
+
+-Add our replicas to the shard
+sh.addShard( "rs1/mongodb0.example.net:27017" ) 
+Instance does not have to be the primary
+
+-Display the shards info
+sh.status()
+
+============== Enable sharding ==============
+
+-First enable sharding on a DB
+sh.enableSharding("<database>")
+
+-Create the sharding key
+sh.shardCollection("<database>.<collection>", shard-key-pattern)
+shard-key-pattern : {"myKey":1}
+shard-key-pattern : {"myKey":"hashed1}
+
+/!\ Key must be an index !!
+To create a Hashed index: db.collection.ensureIndex( { _id: "hashed" } )
+
+sh.satus() can show the current status of the sharding
+db.currentOp() should show any balancer process
+
+/!\ hostname must be the same !!!!!!!!!!!
+
+--Notes: 
+In case of crash, a Mongo lock mongod.lock is created
+rs.reconfig() can be used to reconfigure a rep set
+to Add an arbiter : rs.addArb("host:port")
+Everythig can be conf in a file and ran through "mongo localhost:27017/test myjsfile.js"
+
+
+
+ 
