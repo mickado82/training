@@ -1,4 +1,3 @@
-
 ========== Notes about update =================
 
 db.collection.update(
@@ -34,6 +33,9 @@ Returns:	A WriteResult object that contains the status of the operation.
 /etc/mongod.conf
 
 Service system V: /etc/rc.d/init.d/mongod
+
+Default database location:
+/var/lib/mongodb
 
 ======== Deactivate the service ==============
 
